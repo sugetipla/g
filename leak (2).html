@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>ZagoCORD</title>
+    <style>
+        :root {
+            --bg-color: #050000;
+            --container-bg: rgba(15, 0, 0, 0.95);
+            --input-bg: #1a0000;
+            --text-color: #ffffff;
+            --accent-color: #ff0000;
+            --glow-spread: 0px;
+            --glow-opacity: rgba(255, 0, 0, 0.3);
+        }
+
+        body {
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            background-color: var(--bg-color);
+            background-size: cover;
+            background-position: center;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; margin: 0; overflow: hidden; color: var(--text-color);
+        }
+
+        /* Eliminat stilurile pentru authOverlay */
+
+        #effectCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+        .container {
+            background-color: var(--container-bg); padding: 25px; border-radius: 12px;
+            width: 580px; box-shadow: 0 0 var(--glow-spread) var(--glow-opacity);
+            border: 1px solid var(--accent-color); position: relative; z-index: 10;
+            transition: box-shadow 0.3s ease; display: block; /* Modificat din none in block */
+        }
+
+        h1 { text-align: center; margin: 0; font-size: 32px; letter-spacing: 4px; color: var(--accent-color); text-transform: uppercase; }
+        .header-subtitle { text-align: center; font-family: sans-serif; font-size: 11px; color: white; letter-spacing: 3px; margin-bottom: 15px; }
+        
+        .tabs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 15px; }
+        .tab-btn { font-family: sans-serif; background: var(--input-bg); border: none; color: var(--accent-color); padding: 10px 2px; cursor: pointer; font-weight: bold; font-size: 10px; border-radius: 4px; text-align: center; }
+        .tab-btn.active { background: #330000; color: white; border-bottom: 2px solid var(--accent-color); }
+        .panel { display: none; flex-direction: column; gap: 10px; }
+        .panel.active { display: flex; }
+        input, textarea, select { background: var(--input-bg); border: 1px solid #3d0000; border-radius: 4px; padding: 10px; color: white; outline: none; font-family: sans-serif; }
+        textarea { height: 100px; resize: none; }
+        .btn { background: var(--input-bg); border: 1px solid #3d0000; color: white; padding: 8px; border-radius: 4px; cursor: pointer; flex: 1; font-family: sans-serif; font-size: 11px; }
+        
+        .btn-black { background: #000; border: 1px solid var(--accent-color); color: var(--accent-color); padding: 8px; border-radius: 4px; cursor: pointer; flex: 1; font-family: sans-serif; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .btn-black:hover { background: var(--accent-color); color: #000; }
+
+        .info-box { background: #050000; border: 1px solid var(--input-bg); padding: 10px; border-radius: 4px; font-family: sans-serif; font-size: 12px; }
+        .info-title { color: var(--accent-color); font-weight: bold; text-transform: uppercase; margin-bottom: 5px; font-size: 10px; }
+        .info-content { color: #fff; margin-bottom: 10px; }
+        .uptime-text { color: #00ff00; font-family: monospace; font-size: 14px; text-align: center; background: #000; padding: 5px; border-radius: 4px; margin-bottom: 10px; }
+
+        .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 11px; font-family: sans-serif; background: #050000; padding: 8px; border-radius: 4px; color: var(--accent-color); border: 1px solid var(--input-bg); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .hidden-label { font-size: 10px; color: var(--accent-color); text-transform: uppercase; font-weight: bold; margin-bottom: -5px; margin-top: 5px; }
+        .status-bar { height: 10px; background: var(--input-bg); border-radius: 5px; width: 100%; margin-top: 10px; transition: background 0.3s; }
+        
+        #afkLog, #autoReplyLog, #errorLogs {
+            background: #050505; border: 1px solid #1a0000; padding: 10px; border-radius: 4px;
+            font-size: 10px; color: var(--accent-color); font-family: monospace; height: 80px; overflow-y: auto; margin-top: 5px;
+        }
+        #errorLogs { color: #ff4d4d; }
+    </style>
+</head>
+<body>
+
+<canvas id="effectCanvas"></canvas>
+
+<div class="container" id="mainContainer">
+    <h1>Zago</h1>
+    <div class="header-subtitle">discord.gg/beefro</div>
+    <div class="tabs">
+        <button class="tab-btn active" onclick="openTab('typing')">Typing</button>
+        <button class="tab-btn" onclick="openTab('hidden')">Hidden</button>
+        <button class="tab-btn" onclick="openTab('autoreply')">Reply</button>
+        <button class="tab-btn" onclick="openTab('afk')">AFK</button>
+        <button class="tab-btn" onclick="openTab('visuals')">Visuals</button>
+        <button class="tab-btn" onclick="openTab('info')">Info</button>
+    </div>
+
+    <div id="typing" class="panel active">
+        <input type="password" id="token" placeholder="Discord User Token" oninput="saveData()">
+        <input type="text" id="channelId" placeholder="Channel IDs (sep. by comma)" oninput="saveData()">
+        <input type="text" id="pingId" placeholder="User ID to ping" oninput="saveData()">
+        <div class="checkbox-row"><input type="checkbox" id="specialMode"><label> Demon Mode (L-Alt to toggle) </label></div>
+        <textarea id="messageBox" placeholder="Mesaj..." oninput="applyAutoTransform()" onkeydown="handleInputKeys(event)"></textarea>
+        <div class="grid-2">
+            <div class="checkbox-row"><input type="checkbox" id="checkUpper" onclick="toggleTextMode('upper')"><label>UPPERCASE</label></div>
+            <div class="checkbox-row"><input type="checkbox" id="checkLower" onclick="toggleTextMode('lower')"><label>lowercase</label></div>
+        </div>
+        <input type="text" id="startMsg" placeholder="Start Message (Prefix)" oninput="saveData()">
+        <input type="text" id="endMsg" placeholder="End Message (Suffix)" oninput="saveData()">
+        <button class="btn" style="background:var(--input-bg); border-color:var(--accent-color); font-weight:bold; color:var(--accent-color);" onclick="manualSend()">Send Message</button>
+    </div>
+
+    <div id="hidden" class="panel">
+        <div class="hidden-label">Configuration</div>
+        <input type="text" id="macroChannelId" placeholder="Channel IDs (sep. by comma)" oninput="saveData()">
+        <input type="file" id="fileInput" class="btn" style="text-align: left;" accept=".txt">
+        <div class="hidden-label">Macro Settings</div>
+        <div class="grid-2">
+            <select id="lineCount">
+                <option value="1">1 Line</option>
+                <option value="5">5 Lines</option>
+                <option value="10">10 Lines</option>
+                <option value="25">25 Lines</option>
+            </select>
+            <select id="macroMode">
+                <option value="delay">Delay Mode</option>
+                <option value="shiftenter">Shift+Enter Mode</option>
+            </select>
+        </div>
+        <div class="checkbox-row"><input type="checkbox" id="hEnableTyping"> <label>ENABLE TYPING</label></div>
+        <div class="hidden-label">Delay (Seconds)</div>
+        <select id="delaySelect">
+            <option value="1">1 Second</option>
+            <option value="3">3 Seconds</option>
+            <option value="5" selected>5 Seconds</option>
+        </select>
+        <div class="grid-2" style="margin-top:5px;">
+            <button class="btn-black" onclick="startSpam()">Start</button>
+            <button class="btn-black" onclick="stopSpam()">Stop</button>
+        </div>
+        <div class="status-bar" id="spamStatus"></div>
+        <div id="macroStatusText" class="hidden-label" style="text-align:center; color:var(--accent-color); margin-top:5px;">[SPACE] TO START/STOP SPAM</div>
+    </div>
+
+    <div id="autoreply" class="panel">
+        <input type="text" id="replyChannelId" placeholder="Target Channel IDs" oninput="saveData()">
+        <input type="text" id="targetUserId" placeholder="Target User ID to watch" oninput="saveData()">
+        <input type="file" id="replyFile" class="btn" accept=".txt">
+        <button id="autoReplyToggle" class="btn" onclick="toggleAutoReply()">Auto-Reply este dezactivat</button>
+        <div id="autoReplyLog">Nu există activitate...</div>
+        
+        <div class="hidden-label">Reaction Spammer</div>
+        <div class="grid-2">
+            <input type="text" id="reactEmoji" placeholder="Emoji (ex: 🔥)">
+            <button class="btn" id="reactToggle" onclick="toggleReactionSpammer()">React: OFF</button>
+        </div>
+    </div>
+
+    <div id="afk" class="panel">
+        <input type="text" id="afkChannelId" placeholder="AFK Check Channel ID" oninput="saveData()">
+        <input type="text" id="afkResponse" placeholder="Mesaj AFK..." value="Sunt AFK, revin imediat!" oninput="saveData()">
+        <div class="checkbox-row"><input type="checkbox" id="afkMode"><label>Enable AFK Mode</label></div>
+        <div id="afkLog">Nu există activitate...</div>
+    </div>
+
+    <div id="visuals" class="panel">
+        <div class="hidden-label">Presets</div>
+        <div class="grid-2">
+            <button class="btn" onclick="applyTheme('#ff0000', 'rgba(255, 0, 0, 0.3)')">Rosu IN MM</button>
+            <button class="btn" onclick="applyTheme('#bc13fe', 'rgba(188, 19, 254, 0.3)')">Purple Orfane</button>
+            <button class="btn" onclick="applyTheme('#00ff00', 'rgba(0, 255, 0, 0.3)')">Verde pizdo</button>
+            <button class="btn" onclick="applyTheme('#00ffff', 'rgba(0, 255, 255, 0.3)')">Credk Albastru</button>
+        </div>
+        <div class="hidden-label">Effects</div>
+        <div class="grid-2">
+            <button class="btn" onclick="toggleEffect('blood')">/beefro</button>
+            <button class="btn" onclick="toggleEffect('winter')">/beefro</button>
+            <button class="btn" onclick="toggleEffect('rain')">/beefro</button>
+        </div>
+        <div class="hidden-label">Custom Accent Color</div>
+        <input type="color" id="colorPicker" value="#ff0000" style="width:100%; height:40px;" oninput="changeTheme(this.value)">
+    </div>
+
+    <div id="info" class="panel">
+        <div class="uptime-text" id="uptimeDisplay">UPTIME: 00:00:00</div>
+        
+        <button class="btn-black" onclick="checkToken()" style="width:100%; margin-bottom:10px;">Check Token Status</button>
+        <div id="tokenStatus" class="info-box" style="display:none; margin-bottom:10px; border-color: var(--accent-color);">
+            <div class="info-title">Token Info</div>
+            <div id="tokenDetails" class="info-content" style="font-size: 10px; font-family: monospace;"></div>
+        </div>
+
+        <div class="info-box">
+            <div class="info-title">Remote Control</div>
+            <input type="text" id="adminId" placeholder="Admin User ID" oninput="saveData()" style="width: 100%; margin-bottom: 5px; font-size: 10px;">
+            <input type="text" id="remoteChannelId" placeholder="Command Channel ID" oninput="saveData()" style="width: 100%; margin-bottom: 5px; font-size: 10px;">
+            <button id="remoteToggle" class="btn" style="width: 100%; font-size: 10px;" onclick="toggleRemoteControl()">Remote: OFF</button>
+        </div>
+
+        <div class="info-box">
+            <div class="info-title">Honorable Mentions</div>
+            <div class="info-content">Zakone, Vego, Swatted</div>
+            
+            <div class="info-title">Testers</div>
+            <div class="info-content">Akewon, Ramses, Winter</div>
+        </div>
+        <div class="hidden-label" style="color:#ff4d4d">Error Logs</div>
+        <div id="errorLogs">Sistem pregătit. Nicio eroare detectată.</div>
+        <button class="btn" style="font-size: 8px; margin-top: 5px;" onclick="document.getElementById('errorLogs').innerText = 'Logs cleared.'">Clear Logs</button>
+    </div>
+</div>
+
+<script>
+    let macroLines = [], replyLines = [], currentLineIndex = 0, isSpamming = false, isAutoReplyActive = false;
+    let spamInterval = null, autoReplyInterval = null, typingInterval = null;
+    let lastMessageIds = {}, lastAfkMessageId = null, selfId = null;
+    let startTime = Date.now();
+
+    // UPTIME SYSTEM
+    setInterval(() => {
+        let now = Date.now();
+        let diff = Math.floor((now - startTime) / 1000);
+        let h = Math.floor(diff / 3600).toString().padStart(2, '0');
+        let m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+        let s = (diff % 60).toString().padStart(2, '0');
+        document.getElementById('uptimeDisplay').innerText = `UPTIME: ${h}:${m}:${s}`;
+    }, 1000);
+
+    function logError(msg) {
+        const log = document.getElementById('errorLogs');
+        const time = new Date().toLocaleTimeString();
+        if (log.innerText.includes("Nicio eroare")) log.innerText = "";
+        log.innerText = `[${time}] ${msg}\n` + log.innerText;
+    }
+
+    let activeEffect = null; 
+    const canvas = document.getElementById('effectCanvas'), ctx = canvas.getContext('2d');
+    let bloodDrops = [], snowflakes = [], rainDrops = [];
+    
+    function initParticles() { 
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight; 
+        for(let i=0; i<80; i++) { 
+            bloodDrops.push({x:Math.random()*canvas.width, y:Math.random()*canvas.height, s:Math.random()*5+5});
+            snowflakes.push({x:Math.random()*canvas.width, y:Math.random()*canvas.height, s:Math.random()*2+1});
+            rainDrops.push({x:Math.random()*canvas.width, y:Math.random()*canvas.height, s:Math.random()*10+10});
+        } 
+    }
+
+    function toggleEffect(type) { activeEffect = (activeEffect === type) ? null : type; }
+
+    function draw() { 
+        ctx.clearRect(0,0,canvas.width,canvas.height); 
+        const currentAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent-color');
+        if(activeEffect==='blood'){
+            ctx.strokeStyle=currentAccent; bloodDrops.forEach(p=>{ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x,p.y+15);ctx.stroke();p.y+=p.s;if(p.y>canvas.height)p.y=-20;});
+        } else if(activeEffect==='winter'){
+            ctx.fillStyle='white'; snowflakes.forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,2,0,Math.PI*2);ctx.fill();p.y+=p.s;if(p.y>canvas.height)p.y=-10;});
+        } else if(activeEffect==='rain'){
+            ctx.strokeStyle='#bc13fe'; rainDrops.forEach(p=>{ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x,p.y+10);ctx.stroke();p.y+=p.s;if(p.y>canvas.height)p.y=-20;});
+        }
+        requestAnimationFrame(draw); 
+    }
+    initParticles(); draw();
+
+    function handleInputKeys(e) { 
+        if (e.code === 'AltLeft') { e.preventDefault(); document.getElementById('specialMode').checked = !document.getElementById('specialMode').checked; }
+        if (document.getElementById('specialMode').checked) { if (e.code === 'Space') { e.preventDefault(); manualSend(); } } 
+        else { if (e.code === 'Enter' && !e.shiftKey) { e.preventDefault(); manualSend(); } }
+    }
+
+    async function manualSend() { 
+        const t = document.getElementById('token').value;
+        const c = document.getElementById('channelId').value;
+        const mb = document.getElementById('messageBox');
+        
+        const prefix = document.getElementById('startMsg').value || "";
+        const suffix = document.getElementById('endMsg').value || "";
+
+        if (!t || !c || !mb.value.trim()) return; 
+        
+        const channelList = c.split(',').map(id => id.trim());
+        const finalMessage = prefix + mb.value + suffix;
+        mb.value = ""; 
+
+        for (const chan of channelList) {
+            fetch(`https://discord.com/api/v9/channels/${chan}/messages`, { 
+                method: 'POST', 
+                headers: {'Authorization': t, 'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ content: finalMessage }) 
+            }).catch(err => logError("Eroare la trimitere"));
+        }
+    }
+
+    function toggleTextMode(mode) { if (mode === 'upper') { if (document.getElementById('checkUpper').checked) document.getElementById('checkLower').checked = false; } else { if (document.getElementById('checkLower').checked) document.getElementById('checkUpper').checked = false; } applyAutoTransform(); }
+    function applyAutoTransform() { const mb = document.getElementById('messageBox'); if (document.getElementById('checkUpper').checked) mb.value = mb.value.toUpperCase(); if (document.getElementById('checkLower').checked) mb.value = mb.value.toLowerCase(); }
+    
+    function startSpam() { 
+        if (isSpamming) return; 
+        const token = document.getElementById('token').value;
+        const macroChan = document.getElementById('macroChannelId').value || document.getElementById('channelId').value;
+        const count = parseInt(document.getElementById('lineCount').value);
+        const mode = document.getElementById('macroMode').value;
+        const delay = parseInt(document.getElementById('delaySelect').value) * 1000;
+
+        if (macroLines.length === 0 || !token || !macroChan) {
+            logError("Verifică Fișier/Token/Channel");
+            return;
+        }
+
+        isSpamming = true; 
+        document.getElementById('spamStatus').style.background = "var(--accent-color)";
+        const channelList = macroChan.split(',').map(id => id.trim());
+        
+        const run = async () => {
+            if (!isSpamming) return;
+
+            let batch = [];
+            for(let i = 0; i < count; i++) {
+                batch.push(macroLines[currentLineIndex % macroLines.length].trim());
+                currentLineIndex++;
+            }
+
+            for (const chan of channelList) {
+                if (mode === "shiftenter") {
+                    fetch(`https://discord.com/api/v9/channels/${chan}/messages`, {
+                        method: 'POST', 
+                        headers: {'Authorization': token, 'Content-Type': 'application/json'},
+                        body: JSON.stringify({ content: batch.join('\n') })
+                    }).catch(e => {});
+                } else {
+                    for (const msg of batch) {
+                        fetch(`https://discord.com/api/v9/channels/${chan}/messages`, {
+                            method: 'POST', 
+                            headers: {'Authorization': token, 'Content-Type': 'application/json'},
+                            body: JSON.stringify({ content: msg })
+                        }).catch(e => {});
+                    }
+                }
+            }
+        };
+
+        run();
+        spamInterval = setInterval(run, delay);
+    }
+
+    function stopSpam() { isSpamming = false; document.getElementById('spamStatus').style.background = "var(--input-bg)"; clearInterval(spamInterval); }
+
+    function toggleAutoReply() {
+        if (!isAutoReplyActive) {
+            const t = document.getElementById('token').value, target = document.getElementById('targetUserId').value, chans = document.getElementById('replyChannelId').value;
+            if(!t || !target || !chans || replyLines.length === 0) return;
+            isAutoReplyActive = true;
+            document.getElementById('autoReplyToggle').innerText = "Auto-Reply Activat";
+            const channelList = chans.split(',').map(id => id.trim());
+            autoReplyInterval = setInterval(async () => {
+                for(const chanId of channelList) {
+                    try {
+                        const res = await fetch(`https://discord.com/api/v9/channels/${chanId}/messages?limit=1`, { headers: {'Authorization': t} });
+                        const data = await res.json();
+                        if(data && data[0] && data[0].author.id === target && data[0].id !== lastMessageIds[chanId]) {
+                            lastMessageIds[chanId] = data[0].id;
+                            const reply = replyLines[Math.floor(Math.random()*replyLines.length)];
+                            fetch(`https://discord.com/api/v9/channels/${chanId}/messages`, {
+                                method: 'POST', headers: {'Authorization': t, 'Content-Type': 'application/json'},
+                                body: JSON.stringify({ content: reply, message_reference: { message_id: data[0].id } })
+                            });
+                        }
+                    } catch(e) {}
+                }
+            }, 2000);
+        } else {
+            isAutoReplyActive = false;
+            document.getElementById('autoReplyToggle').innerText = "Auto-Reply Dezactivat";
+            clearInterval(autoReplyInterval);
+        }
+    }
+
+    function openTab(n) { document.querySelectorAll('.panel').forEach(p => p.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.getElementById(n).classList.add('active'); event.currentTarget.classList.add('active'); }
+    
+    function saveData() { 
+        const fields = ['token', 'channelId', 'pingId', 'macroChannelId', 'replyChannelId', 'targetUserId', 'afkChannelId', 'afkResponse', 'startMsg', 'endMsg', 'adminId', 'remoteChannelId'];
+        fields.forEach(id => { localStorage.setItem('z_'+id, document.getElementById(id).value); }); 
+    }
+    
+    window.onload = () => { 
+        const fields = ['token', 'channelId', 'pingId', 'macroChannelId', 'replyChannelId', 'targetUserId', 'afkChannelId', 'afkResponse', 'startMsg', 'endMsg', 'adminId', 'remoteChannelId'];
+        fields.forEach(id => { const v = localStorage.getItem('z_'+id); if(v) document.getElementById(id).value = v; }); 
+    };
+    
+    // Eliminat functiile handleAuth, toggleAuth si logout (care făcea reload pentru login)
+    function changeTheme(c) { document.documentElement.style.setProperty('--accent-color', c); }
+    
+    document.getElementById('fileInput').addEventListener('change', e => { const r = new FileReader(); r.onload = ev => macroLines = ev.target.result.split('\n').filter(l => l.trim()); r.readAsText(e.target.files[0]); });
+    document.getElementById('replyFile').addEventListener('change', e => { const r = new FileReader(); r.onload = ev => replyLines = ev.target.result.split('\n').filter(l => l.trim()); r.readAsText(e.target.files[0]); });
+
+    function applyTheme(hex, glow) { document.documentElement.style.setProperty('--accent-color', hex); document.documentElement.style.setProperty('--glow-opacity', glow); document.getElementById('colorPicker').value = hex; }
+
+    async function checkToken() {
+        const t = document.getElementById('token').value;
+        if(!t) return;
+        try {
+            const r = await fetch('https://discord.com/api/v9/users/@me', { headers: {'Authorization': t} });
+            const data = await r.json();
+            if(r.ok) {
+                document.getElementById('tokenStatus').style.display = 'block';
+                document.getElementById('tokenDetails').innerHTML = `User: ${data.username}<br>ID: ${data.id}<br>Status: VALID`;
+            }
+        } catch(e) {}
+    }
+
+    let reactionInterval = null;
+    let lastReactedMessageId = {};
+
+    function toggleReactionSpammer() {
+        const btn = document.getElementById('reactToggle'), emoji = document.getElementById('reactEmoji').value, t = document.getElementById('token').value, chans = document.getElementById('replyChannelId').value, target = document.getElementById('targetUserId').value;
+        if (reactionInterval) { clearInterval(reactionInterval); reactionInterval = null; btn.innerText = "React: OFF"; } 
+        else {
+            if(!emoji || !target || !chans || !t) return;
+            btn.innerText = "React: ON";
+            const channelList = chans.split(',').map(id => id.trim());
+            reactionInterval = setInterval(async () => {
+                for(const chanId of channelList) {
+                    try {
+                        const res = await fetch(`https://discord.com/api/v9/channels/${chanId}/messages?limit=1`, { headers: {'Authorization': t} });
+                        const msgs = await res.json();
+                        if(msgs[0] && msgs[0].author.id === target && msgs[0].id !== lastReactedMessageId[chanId]) {
+                            lastReactedMessageId[chanId] = msgs[0].id;
+                            fetch(`https://discord.com/api/v9/channels/${chanId}/messages/${msgs[0].id}/reactions/${encodeURIComponent(emoji)}/@me`, { method: 'PUT', headers: {'Authorization': t} });
+                        }
+                    } catch(e) {}
+                }
+            }, 2000);
+        }
+    }
+
+    let remoteInterval = null;
+    let lastRemoteMsgId = null;
+
+    function toggleRemoteControl() {
+        const btn = document.getElementById('remoteToggle');
+        const token = document.getElementById('token').value;
+        const adminId = document.getElementById('adminId').value;
+        const remoteChan = document.getElementById('remoteChannelId').value;
+
+        if (remoteInterval) {
+            clearInterval(remoteInterval);
+            remoteInterval = null;
+            btn.innerText = "Remote: OFF";
+            btn.style.borderColor = "var(--input-bg)";
+        } else {
+            if (!token || !adminId || !remoteChan) {
+                logError("Remote: Date lipsă.");
+                return;
+            }
+            btn.innerText = "Remote: ON";
+            btn.style.borderColor = "#00ff00";
+            remoteInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`https://discord.com/api/v9/channels/${remoteChan}/messages?limit=1`, { headers: { 'Authorization': token } });
+                    const msgs = await res.json();
+                    if (msgs[0] && msgs[0].author.id === adminId && msgs[0].id !== lastRemoteMsgId) {
+                        lastRemoteMsgId = msgs[0].id;
+                        executeRemoteCommand(msgs[0].content);
+                    }
+                } catch (e) {}
+            }, 2500);
+        }
+    }
+
+    function executeRemoteCommand(cmd) {
+        const command = cmd.toLowerCase().trim();
+        if (command === '.spam') { 
+            startSpam(); 
+            logError("Remote: Spam pornit"); 
+        }
+        else if (command === '.stop') { 
+            stopSpam(); 
+            if(isAutoReplyActive) toggleAutoReply(); 
+            logError("Remote: Stop executat"); 
+        }
+        else if (command === '.status') { 
+            logError("Remote: Status check - Online");
+        }
+    }
+</script>
+</body>
+</html>
